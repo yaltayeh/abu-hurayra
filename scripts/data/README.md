@@ -171,6 +171,11 @@ The same list for the previous normalizer (top 50) is reproducible with `--steps
 `سليمان|سليمن` (5×), `االه|اله` (5×), `السماوات|السموت` (4×), then `العالمين|العلمين`, `ايات|ايت`, `عاقبه|عقبه`, `الملا|الملوا`,
 `باياتنا|بايتنا` (3× each): almost all are the dagger alef that the imla'i spelling writes as ا.
 
+## Serving the fonts and the data (review page)
+
+`node scripts/data/copy-assets.mjs` copies `data/QPC-V2/woff2/p<N>.woff2` to `public/fonts/v2/p<NNN>.woff2` (zero-padded) and `quran-core.bin` to
+`public/data/`. Both folders are git-ignored; see `docs/review-page.md`.
+
 ## Deployment note for fonts
 
 Serve only the woff2 files, same origin, as `fonts/<style>/p001.woff2 … p604.woff2` (zero-padded; the source files are
