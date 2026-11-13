@@ -1,0 +1,17 @@
+import { pipeline, env } from "../node_modules/@huggingface/transformers/dist/transformers.node.mjs";
+import { execFileSync } from "node:child_process";
+import path from "node:path"; import { fileURLToPath } from "node:url";
+const here = path.dirname(fileURLToPath(import.meta.url));
+env.localModelPath = here; env.allowRemoteModels = false;
+const mb = () => (process.memoryUsage().rss/1e6).toFixed(0)+"MB";
+const dtype = process.argv[2];
+console.log("start", mb());
+const raw = execFileSync("ffmpeg", ["-v","error","-i",path.join(here,"../test-tarteel-ai/1.mp3"),"-ac","1","-ar","16000","-f","f32le","-"], { maxBuffer: 1<<28 });
+const audio = new Float32Array(raw.buffer.slice(raw.byteOffset, raw.byteOffset+raw.byteLength));
+console.log("audio", mb());
+const asr = await pipeline("automatic-speech-recognition","whisper-quran-onnx",{dtype});
+console.log("loaded", mb());
+const t = setInterval(()=>{ peak=Math.max(peak,process.memoryUsage().rss) },20); let peak=0;
+await asr(audio,{language:"arabic",task:"transcribe",return_timestamps:"word",chunk_length_s:30});
+clearInterval(t);
+console.log("done", mb(), "peak during run", (peak/1e6).toFixed(0)+"MB");

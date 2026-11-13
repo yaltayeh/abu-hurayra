@@ -1,0 +1,12 @@
+import { execFileSync } from "node:child_process";
+import { analyzeSegments } from "../src/segment.ts";
+const load = f => { const raw = execFileSync("ffmpeg", ["-v","error","-i",f,"-ac","1","-ar","16000","-f","f32le","-"], { maxBuffer: 1<<30 }); return new Float32Array(raw.buffer.slice(raw.byteOffset, raw.byteOffset+raw.byteLength)); };
+const show = (name, a, o) => { const { segments, info } = analyzeSegments(a, 16000, o);
+  console.log(name.padEnd(46), `segs ${info.segments}, longest ${info.longestSec.toFixed(1)}s, retries ${info.retries}, thr ${info.thresholdDb.toFixed(1)}dB |`, segments.map(s => `${s.start.toFixed(1)}-${s.end.toFixed(1)}`).join(" ")); };
+const a = load("../test-tarteel-ai/1.mp3"), h = load("reverb_heavy.wav");
+show("1.mp3 default", a, {});
+show("1.mp3 threshold fraction 0.02 (almost no cuts)", a, { thresholdFraction: 0.02 });
+show("1.mp3 fraction 0.02, max segment 12s", a, { thresholdFraction: 0.02, maxSegmentSec: 12 });
+show("1.mp3 fraction 0.02, max segment 5s", a, { thresholdFraction: 0.02, maxSegmentSec: 5 });
+show("reverb_heavy fraction 0.02, max segment 12s", h, { thresholdFraction: 0.02, maxSegmentSec: 12 });
+show("reverb_heavy fraction 0.02, minSilence 2s, max 12s", h, { thresholdFraction: 0.02, minSilenceMs: 2000, maxSegmentSec: 12 });
