@@ -1,5 +1,6 @@
 import { TextStreamer, type AutomaticSpeechRecognitionPipeline } from "@huggingface/transformers";
 import { analyzeSegments, type Segment } from "./segment.ts";
+import { LONG_WORD_SEC } from "./long-word.ts";
 
 export const SAMPLE_RATE = 16000;
 const HAS_ARABIC = /[ء-ي]/;
@@ -42,7 +43,11 @@ export type Callbacks = {
   grouping?: GroupOptions | false;
   /** Called after every finished segment (used for periodic debug logging). */
   onSegmentDone?: (index: number) => void;
+  /** Re-transcribe the neighbourhood of abnormally long words (default on, `false` to disable). See `refineLongWords`. */
+  refineLongWords?: boolean;
 };
+
+const REFINE_MAX_PER_GROUP = 8;
 
 export type RunResult = { finished: boolean; nextIndex: number };
 
@@ -205,6 +210,7 @@ export async function transcribeSegments(audio: Float32Array, cb: Callbacks): Pr
     } else if (words === null) {
       unrecognized.push({ start: g.start, end: g.end });
     }
+    if (words && cb.refineLongWords !== false) words = await refineLongWords(words, g, transcribeRange, log);
     done++;
     processedSec += g.end - g.start;
     cb.onSegment?.({ index, start: g.start, end: g.end, words: words ?? [], breaks: g.members.slice(1).map((m) => m.start), unrecognized }, { done, total: groups.length, processedSec });
@@ -212,4 +218,44 @@ export async function transcribeSegments(audio: Float32Array, cb: Callbacks): Pr
   }
   log(`total: audio ${totalAudio.toFixed(1)}s, processing ${totalProc.toFixed(1)}s, RTF ${(totalProc / Math.max(totalAudio, 1e-9)).toFixed(2)}`);
   return { finished: true, nextIndex: groups.length };
+}
+
+type RangeFn = (index: number, start: number, end: number, speechEnd: number, label: string, partial: boolean) => Promise<{ words: Word[] | null | undefined }>;
+
+/**
+ * Whisper drops a repeated phrase when both occurrences are inside one call (18.mp3: "من لدنك رحمة" said twice in one 20 s group came back
+ * once, and `لَدُنْكَ` was stretched over 9 s; the same audio transcribed segment by segment gives both). A group is several
+ * silence-delimited segments merged to save calls, so when a word of the group lasts at least LONG_WORD_SEC the segments it spans are
+ * transcribed one by one. Their words replace the group's words of that time range only if there are more of them; a long pause or a
+ * real elongation gives the same words and the original is kept.
+ */
+export async function refineLongWords(words: Word[], g: Group, run: RangeFn, log: (line: string) => void): Promise<Word[]> {
+  if (g.members.length < 2) return words;
+  const ranges: [number, number][] = []; // member index ranges to redo, merged
+  for (const w of words) {
+    const [start, end] = w.timestamp;
+    if (end == null || end - start < LONG_WORD_SEC) continue;
+    const first = g.members.findIndex((m) => start < m.end);
+    let last = first;
+    while (last + 1 < g.members.length && g.members[last + 1].start < end) last++;
+    if (first < 0) continue;
+    const prev = ranges.at(-1);
+    if (prev && first <= prev[1] + 1) prev[1] = Math.max(prev[1], last);
+    else ranges.push([first, last]);
+  }
+  let out = words;
+  for (const [a, b] of ranges.slice(0, REFINE_MAX_PER_GROUP)) {
+    const from = g.members[a].start, to = g.members[b].end;
+    const fresh: Word[] = [];
+    for (let m = a; m <= b; m++) {
+      const mem = g.members[m];
+      const r = await run(-1, mem.start, mem.end, mem.speechEnd, `refine segment ${m + 1}/${g.members.length}`, false);
+      if (r.words) fresh.push(...r.words);
+    }
+    const old = out.filter((w) => w.timestamp[0] >= from && w.timestamp[0] < to);
+    const used = fresh.length > old.length;
+    log(`long word(s) in ${from.toFixed(1)}-${to.toFixed(1)}s: segment by segment ${old.length} -> ${fresh.length} words${used ? ": " + fresh.map((x) => x.text.trim()).join(" ") : " (not used)"}`);
+    if (used) out = [...out.filter((w) => w.timestamp[0] < from), ...fresh, ...out.filter((w) => w.timestamp[0] >= to)];
+  }
+  return out;
 }

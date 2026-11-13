@@ -6,7 +6,7 @@ const { core, idx, loadMs, indexMs } = loadIndex();
 console.log(`quran-core parse ${loadMs.toFixed(0)} ms, matching index (${idx.n} entries, ${idx.triStrict.size} strict trigrams) ${indexMs.toFixed(0)} ms`);
 const EXPECT = { 1: [1, 1, 7], 82: [82, 1, 19], 51: [51, 1, 60], 27: [27, 1, 93] };
 const rows = [];
-for (const name of ["1", "82", "51", "27"]) {
+for (const name of ["1", "82", "51", "27", "18"]) {
   const groups = loadGroups(dir, name);
   const r = alignTranscript(idx, groups);
   const s = +name;

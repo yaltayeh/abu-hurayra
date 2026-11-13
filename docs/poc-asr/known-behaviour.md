@@ -43,6 +43,25 @@ accuracy tables is this word. Mean/median differences vs Python are therefore sl
   Matching should treat it as a gap.
 - Empty output happens (one segment of `27.mp3`); no Arabic letters -> dropped.
 
+## Whisper drops repeated phrases inside one call (found with 18.mp3)
+
+When the reciter says a phrase twice inside one group (a group is up to 25 s of silence-delimited segments), Whisper often writes it once
+and the alignment stretches the word before it over the lost audio: in 18.mp3 `لَدُنْكَ` lasted 9.1 s (1:46–1:55, "من لدنك رحمة" said twice)
+and `كَنْزٌ` 6.3 s (25:44–25:50, "وكان تحته كنز لهما" twice); the review page showed no repeat there. 20 words of 18.mp3 last ≥ 4 s; most were
+the same thing (a repeated phrase or a skipped stretch: "قل ربي أعلم بعدتهم…" after `كَلْبُهُمْ` 10 s).
+- **Not a window-length effect.** The same audio transcribed one *silence segment* at a time gives both occurrences; a single Whisper call over
+  both (even a 13 s window) did not, in the cases tried. Window variants around the long word were unreliable; re-running the group's segments one
+  by one was reliable (same path as the existing "group looped" fallback).
+- **Fix (`refineLongWords` in `src/transcribe.ts`, on by default, `?refine=0` disables):** for every word of a group lasting ≥ 4 s
+  (`src/long-word.ts`), the group's segments that word spans are transcribed one by one; their words replace the group's words of that time
+  range only when there are more of them. Pauses and real elongations (same words) are kept.
+- **Result on 18.mp3** (Node, q8): 1,616 → 1,670 words, repeat jumps found by the aligner 6 → 19, both reported spots recovered
+  (1:46–1:55: "فقالوا ربنا آتنا من لدنك رحمة" twice; 25:44–25:50 the second "وكان تحته كنز لهما"), 110/110 ayahs, 98.3 % of Quran words
+  matched. Cost: transcription time +32 % (217 → 286 s for 33 min), +40 % on 27.mp3 (204 → 288 s).
+  27.mp3 gained 3 repeats (27:18:13-15, 27:28:6-8, 27:90:4-7), each acoustically as close to its first recitation as the 7 known ones;
+  one span at 8:28–8:36 (27:31) now contains slightly garbled words (the old output had one spurious 4.8 s `اللَّهُ`) and is reported as a rejected span.
+- Words that still last ≥ 4 s after this are flagged "long words" in the review page.
+
 ## Unverified claims (do not rely on them)
 
 - Word counts per surah: from memory I said grouped output (81 for surah 82, 360 for 51, 1,199 for 27) "would match" the

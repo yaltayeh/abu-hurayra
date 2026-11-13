@@ -129,6 +129,7 @@ async function transcribe(audio: Float32Array, startIndex: number): Promise<bool
       const run = await transcribeSegments(audio, {
         getPipeline,
         startIndex,
+        refineLongWords: options!.refine,
         onLog: log,
         onPlan: ({ total, duration, segments }) => self.postMessage({ status: "plan", total, duration, segments }),
         onPartial: (index, text) => self.postMessage({ status: "partial", index, text }),

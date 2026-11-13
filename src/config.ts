@@ -16,6 +16,8 @@ export type RuntimeOptions = {
   recycle: { mode: "off" | "pipeline" | "worker"; segments: number; seconds: number };
   /** Log GPU-cleanup statistics every 10 segments. */
   debug: boolean;
+  /** Re-transcribe segment by segment around words that last >= 4 s (see transcribe.ts refineLongWords). `?refine=0` turns it off. */
+  refine: boolean;
 };
 
 /**
@@ -38,7 +40,7 @@ export function isSafari(ua: string, vendor = ""): boolean {
 /**
  * URL params (for testing each config separately):
  *   ?device=wasm|webgpu   ?dtype=q4|q4w|q8   ?threads=1..8   ?fallback=1 (keep the default fallback chain after the chosen config)
- *   ?recycle=off|pipeline|worker (default off)  ?recycleSegments=20  ?recycleSeconds=300   ?debug=1
+ *   ?recycle=off|pipeline|worker (default off)  ?recycleSegments=20  ?recycleSeconds=300   ?refine=0   ?debug=1
  *
  * Defaults:
  *   Chrome / Edge (WebGPU available): WebGPU q4, then WASM.
@@ -71,5 +73,5 @@ export function resolveOptions(search: string, ua: string, hasWebGPU: boolean, h
     segments: num("recycleSegments", 20),
     seconds: num("recycleSeconds", 300),
   };
-  return { attempts, threads, recycle, debug: p.get("debug") === "1" };
+  return { attempts, threads, recycle, debug: p.get("debug") === "1", refine: p.get("refine") !== "0" };
 }
