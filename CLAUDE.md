@@ -38,5 +38,7 @@ Defaults: Chrome/Edge WebGPU q4; Safari and Firefox WASM q8; fallbacks WASM q8 -
 ## Where things are
 - `src/config.ts` browser defaults · `src/worker.ts` loader/loop · `src/worker-client.ts` replaceable worker ·
   `src/segment.ts` silence segmentation · `src/transcribe.ts` grouping, streaming, fixes · `src/gpu-cleanup.ts` GPU leak fix.
+- `src/quran-data.ts` quran-core decoder · `src/normalize.ts` Uthmani-vs-imla'i normalizer · `src/align/` transcript → Quran alignment
+  (`docs/alignment.md`; tests: `node --no-warnings scripts/align/synthetic.mjs`, `real.mjs`, `perf.mjs`; data: `scripts/data/README.md`).
 - **Read `docs/poc-asr/README.md` first** (why everything is the way it is, what failed, benchmarks, known quirks), then
   `docs/next-phase.md` (agreed plan: Quran matching, data, video).
