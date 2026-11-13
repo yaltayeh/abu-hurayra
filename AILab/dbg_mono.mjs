@@ -1,0 +1,14 @@
+import { pipeline, env } from "@huggingface/transformers";
+import { execFileSync } from "node:child_process";
+import path from "node:path"; import { fileURLToPath } from "node:url";
+import { transcribeSegments } from "../src/transcribe.ts";
+const here = path.dirname(fileURLToPath(import.meta.url));
+env.localModelPath = here; env.allowRemoteModels = false;
+const raw = execFileSync("ffmpeg", ["-v","error","-ss",process.argv[3],"-t",process.argv[4],"-i",path.resolve(process.argv[2]),"-ac","1","-ar","16000","-f","f32le","-"], { maxBuffer: 1<<30 });
+const audio = new Float32Array(raw.buffer.slice(raw.byteOffset, raw.byteOffset+raw.byteLength));
+const asr = await pipeline("automatic-speech-recognition","whisper-quran-onnx",{dtype:"q4"});
+let prev=null, issues=0;
+await transcribeSegments(audio,{ getPipeline: async()=>asr, onSegment:(r)=>{ const w=r.words;
+  w.forEach((x,i)=>{ const p=i?w[i-1]:prev; if(p && x.timestamp[0] < p.timestamp[0]-1e-6){ issues++; console.log(`non-monotonic in seg #${r.index} [${r.start.toFixed(1)}-${r.end.toFixed(1)}]: "${p.text.trim()}" @${p.timestamp[0].toFixed(2)} then "${x.text.trim()}" @${x.timestamp[0].toFixed(2)}`);} });
+  if(w.length) prev=w.at(-1); } });
+console.log("issues", issues);
