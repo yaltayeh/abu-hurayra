@@ -6,7 +6,17 @@ const HAS_ARABIC = /[ء-ي]/;
 const TIMESTAMP_TOKEN = /<\|\d+(\.\d+)?\|>/g;
 
 export type Word = { text: string; timestamp: [number, number | null] };
-export type SegmentResult = { index: number; start: number; end: number; words: Word[] };
+export type TimeSpan = { start: number; end: number };
+export type SegmentResult = {
+  index: number;
+  start: number;
+  end: number;
+  words: Word[];
+  /** Silence boundaries between the segments merged into this group (absolute seconds). The alignment treats them as pauses. */
+  breaks?: number[];
+  /** Spans of this group that produced no usable text (looping/empty output). The alignment may fill them with inferred words. */
+  unrecognized?: TimeSpan[];
+};
 
 export type Callbacks = {
   /** Called once after segmentation. */
@@ -182,6 +192,7 @@ export async function transcribeSegments(audio: Float32Array, cb: Callbacks): Pr
     const label = `group ${index + 1}/${groups.length}`;
     let { words } = await transcribeRange(index, g.start, g.end, g.speechEnd, label, true).then((r) => (r.looped && g.members.length > 1 ? { words: undefined, looped: true } : r));
 
+    const unrecognized: TimeSpan[] = [];
     if (words === undefined) {
       // a merged group looped: redo it segment by segment, so only the looping segment is lost
       log(`${label}: retrying its ${g.members.length} segments one by one`);
@@ -189,11 +200,14 @@ export async function transcribeSegments(audio: Float32Array, cb: Callbacks): Pr
       for (const [i, m] of g.members.entries()) {
         const r = await transcribeRange(index, m.start, m.end, m.speechEnd, `${label}.${i + 1}`, false);
         if (r.words) words.push(...r.words);
+        else unrecognized.push({ start: m.start, end: m.end });
       }
+    } else if (words === null) {
+      unrecognized.push({ start: g.start, end: g.end });
     }
     done++;
     processedSec += g.end - g.start;
-    cb.onSegment?.({ index, start: g.start, end: g.end, words: words ?? [] }, { done, total: groups.length, processedSec });
+    cb.onSegment?.({ index, start: g.start, end: g.end, words: words ?? [], breaks: g.members.slice(1).map((m) => m.start), unrecognized }, { done, total: groups.length, processedSec });
     cb.onSegmentDone?.(index);
   }
   log(`total: audio ${totalAudio.toFixed(1)}s, processing ${totalProc.toFixed(1)}s, RTF ${(totalProc / Math.max(totalAudio, 1e-9)).toFixed(2)}`);
