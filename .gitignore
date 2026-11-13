@@ -46,3 +46,7 @@ test-tarteel-ai/
 # generated Quran data candidates (scripts/data/build.py)
 /scripts/data/out/
 /data/
+
+# review page assets (scripts/data/copy-assets.mjs)
+/public/fonts/
+/public/data/
