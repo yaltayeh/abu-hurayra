@@ -42,3 +42,7 @@ test-tarteel-ai/
 *.m4a
 *.safetensors
 *.pyc
+
+# generated Quran data candidates (scripts/data/build.py)
+/scripts/data/out/
+/data/
