@@ -1,6 +1,7 @@
 // Turns an AlignResult into what the page renders: blocks of words (one per ayah pass, as recited) and a flat list of flags.
 import type { AlignResult, Occurrence } from "../align/types.ts";
 import type { QuranIndex } from "../align/quran-index.ts";
+import { LONG_WORD_SEC } from "../long-word.ts";
 
 export type Item = {
   k: number; // index in result.occurrences
@@ -20,11 +21,11 @@ export type Block = {
   heading: boolean; // first block of a surah
 };
 
-export type FlagType = "jump" | "rejected" | "substituted" | "inferred" | "repeat" | "extra" | "incomplete" | "basmala" | "ambiguous";
+export type FlagType = "long" | "jump" | "rejected" | "substituted" | "inferred" | "repeat" | "extra" | "incomplete" | "basmala" | "ambiguous";
 export type Flag = { id: string; type: FlagType; time: number; end: number; text: string; k: number | null };
 
 export const FLAG_COLORS: Record<FlagType, string> = {
-  jump: "var(--c-jump)", rejected: "var(--c-rej)", substituted: "var(--c-sub)", inferred: "var(--c-inf)", repeat: "var(--c-rep)",
+  long: "var(--c-long)", jump: "var(--c-jump)", rejected: "var(--c-rej)", substituted: "var(--c-sub)", inferred: "var(--c-inf)", repeat: "var(--c-rep)",
   extra: "var(--c-ext)", incomplete: "var(--c-inc)", basmala: "var(--c-bas)", ambiguous: "var(--c-amb)",
 };
 
@@ -110,6 +111,10 @@ export function buildModel(result: AlignResult, idx: QuranIndex, asrText: (i: nu
   }
   for (let k = 0; k < occ.length; k++) {
     const o = occ[k];
+    // a word that lasts seconds: a pause or a real elongation, or speech the ASR dropped (a repeated phrase, 18.mp3 1:41)
+    if (o.kind !== "extra" && o.kind !== "inferred" && o.end - o.start >= LONG_WORD_SEC) {
+      add("long", o, k, `${wordLabel(o)} ${core.textWords[o.textIndex!]} lasts ${(o.end - o.start).toFixed(1)} s: check for a repeat or dropped words`);
+    }
     if (o.kind === "substituted") add("substituted", o, k, `${wordLabel(o)} ${core.textWords[o.textIndex!]}  ← ASR "${o.asr.map(asrText).join(" ")}" (conf ${o.confidence.toFixed(2)})`);
     else if (o.kind === "inferred" && !o.basmala) {
       let e = k;

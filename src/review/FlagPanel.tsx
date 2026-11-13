@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { FLAG_COLORS, fmtTime, type Flag, type FlagType } from "./model.ts";
 
-const ORDER: FlagType[] = ["rejected", "jump", "repeat", "substituted", "inferred", "extra", "incomplete", "basmala", "ambiguous"];
+const ORDER: FlagType[] = ["rejected", "long", "jump", "repeat", "substituted", "inferred", "extra", "incomplete", "basmala", "ambiguous"];
 const NAMES: Record<FlagType, string> = {
-  rejected: "rejected", jump: "jumps", repeat: "repeats", substituted: "substituted", inferred: "inferred (missing)", extra: "extra ASR words",
+  rejected: "rejected", long: "long words", jump: "jumps", repeat: "repeats", substituted: "substituted", inferred: "inferred (missing)", extra: "extra ASR words",
   incomplete: "incomplete ayah", basmala: "basmala", ambiguous: "ambiguous",
 };
 

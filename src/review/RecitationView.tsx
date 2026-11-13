@@ -1,3 +1,4 @@
+import { LONG_WORD_SEC } from "../long-word.ts";
 import { memo, useEffect, useSyncExternalStore } from "react";
 import type { Block, Item } from "./model.ts";
 import { fmtTime, wordLabel } from "./model.ts";
@@ -28,7 +29,7 @@ function Row({ it, showExtras, fonts }: { it: Item; showExtras: boolean; fonts: 
       </span>
     );
   }
-  const cls = ["w", o.kind, o.repeat ? "repeat" : "", o.basmala ? "basmala" : "", it.rejected ? "rejected" : "", o.ambiguous ? "ambiguous" : ""].filter(Boolean).join(" ");
+  const cls = ["w", o.kind, o.repeat ? "repeat" : "", o.basmala ? "basmala" : "", o.end - o.start >= LONG_WORD_SEC ? "long" : "", it.rejected ? "rejected" : "", o.ambiguous ? "ambiguous" : ""].filter(Boolean).join(" ");
   return (
     <>
       <Glyph page={it.page!} glyph={it.glyph!} className={cls} title={tip(it)} k={it.k} fonts={fonts} />

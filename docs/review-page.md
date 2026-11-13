@@ -26,7 +26,7 @@ assets the page shows the command to run. The font license is still unchecked: d
   reason, *new passage / skip / re-anchor* labels above the block (green, amber, red), basmala grey. Hover a word (or look at the line under the
   legend): `surah:ayah:word · kind · confidence · time · ASR text`.
 - **Flags panel**: every flag with its time, filterable by type with counts; click = seek and scroll to it (extra words are shown automatically).
-  Flags: rejected spans, jumps/skips/re-anchors, repeats, substituted words (with the ASR word), inferred runs, extra ASR words, incomplete
+  Flags: long words (a word lasting ≥ 4 s: a pause, an elongation, or speech the ASR dropped, see `poc-asr/known-behaviour.md`), rejected spans, jumps/skips/re-anchors, repeats, substituted words (with the ASR word), inferred runs, extra ASR words, incomplete
   ayahs, unrecognized basmalas (only when the gap could hold one), ambiguous start, whole-input rejection.
 - **Progressive**: the worker posts each group; the aligner re-runs on all groups received (6–12 ms for 82.mp3, ~90 ms for 28 min) and the page updates.
   The stats line shows counts, groups and the aligner time.

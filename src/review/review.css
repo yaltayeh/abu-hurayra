@@ -1,5 +1,5 @@
 .review {
-  --c-jump: #16a34a; --c-rej: #dc2626; --c-sub: #d97706; --c-inf: #2563eb; --c-rep: #9333ea; --c-ext: #e11d48; --c-inc: #ca8a04; --c-bas: #64748b; --c-amb: #0891b2;
+  --c-jump: #16a34a; --c-rej: #dc2626; --c-sub: #d97706; --c-inf: #2563eb; --c-rep: #9333ea; --c-ext: #e11d48; --c-inc: #ca8a04; --c-bas: #64748b; --c-long: #0d9488; --c-amb: #0891b2;
   --fg: #1f2937; --bg: #fff; --card: #f8fafc; --line: #e2e8f0; --gold: #b8860b;
   color: var(--fg); background: var(--bg); min-height: 100vh; font: 15px/1.4 system-ui, sans-serif; letter-spacing: 0;
 }
@@ -34,6 +34,7 @@
 .review .w.inferred, .review .sw.inferred { background: color-mix(in srgb, var(--c-inf) 16%, transparent); box-shadow: inset 0 -3px var(--c-inf); opacity: .8; border-bottom: 2px dashed var(--c-inf); }
 .review .w.repeat, .review .sw.repeat { background: color-mix(in srgb, var(--c-rep) 22%, transparent); box-shadow: inset 0 -3px var(--c-rep); }
 .review .w.basmala, .review .sw.basmala { color: var(--c-bas); }
+.review .w.long { border-top: 3px dotted var(--c-long); }
 .review .w.ambiguous { text-decoration: wavy underline var(--c-amb); }
 .review .w.rejected, .review .extra.rejected { outline: 2px solid var(--c-rej); }
 .review .sw.rejected { outline: 2px solid var(--c-rej); }
