@@ -1,0 +1,63 @@
+.review {
+  --c-jump: #16a34a; --c-rej: #dc2626; --c-sub: #d97706; --c-inf: #2563eb; --c-rep: #9333ea; --c-ext: #e11d48; --c-inc: #ca8a04; --c-bas: #64748b; --c-amb: #0891b2;
+  --fg: #1f2937; --bg: #fff; --card: #f8fafc; --line: #e2e8f0; --gold: #b8860b;
+  color: var(--fg); background: var(--bg); min-height: 100vh; font: 15px/1.4 system-ui, sans-serif; letter-spacing: 0;
+}
+@media (prefers-color-scheme: dark) {
+  .review { --fg: #e5e7eb; --bg: #0f172a; --card: #1e293b; --line: #334155; --gold: #fbbf24; }
+}
+.review header { position: sticky; top: 0; z-index: 5; background: var(--bg); border-bottom: 1px solid var(--line); padding: 10px 16px; display: grid; gap: 6px; }
+.review .bar { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; }
+.review .status { color: var(--c-bas); }
+.review .err { color: var(--c-rej); }
+.review audio { width: 100%; }
+.review progress { width: 100%; height: 6px; }
+.review .legend { display: flex; flex-wrap: wrap; gap: 6px; font-size: 12px; }
+.review .sw { padding: 1px 8px; border-radius: 10px; border: 1px solid var(--line); }
+.review .hover { min-height: 1.3em; font: 13px ui-monospace, monospace; color: var(--fg); }
+.review .stats { font: 12px ui-monospace, monospace; color: var(--c-bas); }
+.review main { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 16px; padding: 16px; align-items: start; }
+@media (max-width: 900px) { .review main { grid-template-columns: 1fr; } }
+.review .empty { color: var(--c-bas); padding: 40px; text-align: center; }
+
+.review .recitation { font-size: 34px; }
+.review .block { margin: 0 0 14px; padding-bottom: 6px; border-bottom: 1px dashed var(--line); }
+.review .surah { margin: 24px 0 6px; font: 600 14px system-ui; color: var(--c-bas); border-top: 2px solid var(--line); padding-top: 6px; }
+.review .line { line-height: 2.5; text-align: right; overflow-wrap: anywhere; }
+.review .w, .review .marker { display: inline-block; margin: 0 0.04em; padding: 0 0.04em; border-radius: 6px; cursor: pointer; transition: background .12s; }
+.review .w.loading, .review .marker.loading { opacity: .25; }
+.review .w.nofont, .review .marker.nofont { opacity: .6; outline: 1px solid var(--c-rej); }
+.review .marker { color: var(--gold); cursor: default; }
+.review .marker.partial { color: var(--c-inc); outline: 1px dotted var(--c-inc); }
+.review .w:hover { background: color-mix(in srgb, var(--fg) 10%, transparent); }
+.review .w.substituted, .review .sw.substituted { background: color-mix(in srgb, var(--c-sub) 28%, transparent); box-shadow: inset 0 -3px var(--c-sub); }
+.review .w.inferred, .review .sw.inferred { background: color-mix(in srgb, var(--c-inf) 16%, transparent); box-shadow: inset 0 -3px var(--c-inf); opacity: .8; border-bottom: 2px dashed var(--c-inf); }
+.review .w.repeat, .review .sw.repeat { background: color-mix(in srgb, var(--c-rep) 22%, transparent); box-shadow: inset 0 -3px var(--c-rep); }
+.review .w.basmala, .review .sw.basmala { color: var(--c-bas); }
+.review .w.ambiguous { text-decoration: wavy underline var(--c-amb); }
+.review .w.rejected, .review .extra.rejected { outline: 2px solid var(--c-rej); }
+.review .sw.rejected { outline: 2px solid var(--c-rej); }
+.review .sw.marker { color: var(--gold); }
+.review .sw.extra { color: var(--c-ext); border-color: var(--c-ext); }
+.review .extra { display: inline-block; font: 600 15px system-ui; margin: 0 4px; padding: 1px 8px; border-radius: 10px; color: var(--c-ext); background: color-mix(in srgb, var(--c-ext) 12%, transparent); border: 1px solid var(--c-ext); cursor: pointer; vertical-align: middle; }
+.review .cur { background: color-mix(in srgb, #facc15 55%, transparent) !important; outline: 2px solid #eab308; }
+.review .flash { animation: flash 1.4s; }
+@keyframes flash { 0%, 60% { background: #f472b6; } 100% { background: transparent; } }
+
+.review .note { font: 13px system-ui; margin: 6px 0 2px; padding: 3px 10px; border-radius: 6px; border-inline-start: 4px solid; cursor: pointer; width: fit-content; max-width: 100%; }
+.review .note .t { font-family: ui-monospace, monospace; opacity: .7; }
+.review .note.jump { border-color: var(--c-jump); background: color-mix(in srgb, var(--c-jump) 14%, transparent); }
+.review .note.skip { border-color: var(--c-inc); background: color-mix(in srgb, var(--c-inc) 16%, transparent); }
+.review .note.reanchor, .review .note.reject { border-color: var(--c-rej); background: color-mix(in srgb, var(--c-rej) 14%, transparent); }
+.review .note.repeat { border-color: var(--c-rep); background: color-mix(in srgb, var(--c-rep) 14%, transparent); }
+
+.review .panel { position: sticky; top: 190px; max-height: calc(100vh - 210px); overflow: auto; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 10px; }
+.review .panel h2 { margin: 0 0 8px; font-size: 15px; }
+.review .filters { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; font-size: 12px; }
+.review .filters label { border: 1px solid; border-radius: 10px; padding: 1px 8px; cursor: pointer; }
+.review .flags { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.review .flags button { width: 100%; text-align: start; border: 0; border-inline-start: 4px solid; background: transparent; color: inherit; padding: 4px 8px; cursor: pointer; font: 12px/1.35 system-ui; border-radius: 4px; }
+.review .flags button:hover { background: color-mix(in srgb, var(--fg) 8%, transparent); }
+.review .flags .t { font-family: ui-monospace, monospace; opacity: .7; }
+.review .flags .type { font-weight: 700; text-transform: uppercase; font-size: 10px; letter-spacing: .04em; }
+.review .flags .text { display: block; word-break: break-word; }

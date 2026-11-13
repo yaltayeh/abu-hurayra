@@ -1,4 +1,5 @@
 import { useEffect, useState, type ChangeEvent } from "react";
+import { decode } from "./audio.ts";
 import { subscribe, transcribe } from "./worker-client.ts";
 
 function mem() {
@@ -6,18 +7,6 @@ function mem() {
   return m ? `jsHeap=${(m.usedJSHeapSize / 1048576).toFixed(0)}MB` : "mem=n/a";
 }
 const log = (s: string) => console.log(`[main ${(performance.now() / 1000).toFixed(1)}s] ${s} ${mem()}`);
-
-/** Decode a file to 16 kHz mono. Owns its own Float32Array so it can be transferred to the worker without copies. */
-async function decode(file: File): Promise<Float32Array> {
-  const ctx = new AudioContext({ sampleRate: 16000 });
-  try {
-    // The file's ArrayBuffer only lives inside this call: decodeAudioData consumes it and nothing else keeps a reference.
-    const decoded = await ctx.decodeAudioData(await file.arrayBuffer());
-    return decoded.getChannelData(0).slice(); // copy out, so the AudioBuffer (all channels) can be freed
-  } finally {
-    await ctx.close();
-  }
-}
 
 type Word = { text: string; timestamp: [number, number | null] };
 type Seg = { index: number; start: number; end: number; words: Word[] };
