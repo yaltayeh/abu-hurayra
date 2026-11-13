@@ -1,49 +1,10 @@
 // Synthetic edge cases built from REAL ASR output (82, 51, 1 dumps). Usage: node --no-warnings scripts/align/synthetic.mjs [asr-dir]  (default: scripts/align/fixtures)
+
 import { alignTranscript } from "../../src/align/align.ts";
 import { resolveBasmalas } from "../../src/align/basmala.ts";
-import { normalize } from "../../src/normalize.ts";
-import { loadIndex, loadGroups, label } from "./common.mjs";
-
-const dir = process.argv[2] ?? new URL("./fixtures", import.meta.url).pathname;
-const { core, idx } = loadIndex();
-
-// ---- chunk store: ASR words (text + duration) per Quran ayah, taken from the real alignment of each file ----
-const store = new Map(); // "s:a" -> [{text, dur}]
-const flatAsr = {};
-for (const name of ["1", "82", "51"]) {
-  const groups = loadGroups(dir, name);
-  const flat = groups.flatMap((g) => g.words);
-  flatAsr[name] = flat;
-  const r = alignTranscript(idx, groups);
-  for (const o of r.occurrences) {
-    if (o.kind === "extra" || o.kind === "inferred" || o.repeat) continue;
-    const key = `${o.surah}:${o.ayah}`;
-    if (!store.has(key)) store.set(key, new Map());
-    for (const a of o.asr) store.get(key).set(a, { text: flat[a].text, dur: flat[a].end - flat[a].start });
-  }
-}
-const ayah = (s, a, from = 1, to = Infinity) => [...store.get(`${s}:${a}`).entries()].sort((x, y) => x[0] - y[0]).map((e) => e[1]).slice(from - 1, to);
-const ayahs = (s, a, b) => { const out = []; for (let k = a; k <= b; k++) out.push(...ayah(s, k)); return out; };
-/** ASR-like words simulated from the Quran text (strict-normalized, no diacritics): only where no real ASR exists. */
-const simulate = (s, a, b) => { const out = []; for (let j = 0; j < idx.n; j++) if (idx.surah[j] === s && idx.ayah[j] >= a && idx.ayah[j] <= b && !idx.skippableBasmala[j]) out.push({ text: normalize(core.textWords[idx.textIndex[j]]), dur: 0.4 }); return out; };
-const basmala = () => ayah(1, 1).slice(0, 4);
-/** parts: arrays of {text,dur}; each part is its own group (pause before it) unless wrapped in join() */
-function build(parts, { gap = 1.2 } = {}) {
-  const groups = []; let t = 0.2;
-  for (const p of parts) {
-    const words = p.words ?? p;
-    if (!p.joined || !groups.length) { groups.push({ start: t, end: t, words: [], breaks: [], unrecognized: [] }); t += gap; }
-    const g = groups.at(-1);
-    for (const w of words) { g.words.push({ text: w.text, start: t, end: t + w.dur }); t += w.dur; }
-    g.end = t;
-  }
-  return groups;
-}
-const join = (words) => ({ words, joined: true });
-const seq = (r, { basmala: b = false } = {}) => r.occurrences.filter((o) => o.kind !== "extra" && (b || !o.basmala)).map((o) => `${o.surah}:${o.ayah}:${o.word}`);
-const expectSeq = (s, a, b, from = 1) => { const out = []; for (let k = a; k <= b; k++) for (let w = k === a ? from : 1; w <= ayah(s, k).length + 0; w++) out.push(null); return out; };
-void expectSeq;
-function rng(seed) { let x = seed; return () => (x = (x * 1664525 + 1013904223) >>> 0) / 2 ** 32; }
+import { dir, core, idx, flatAsr, ayah, ayahs, simulate, basmala, build, join, seq, rng } from "./synth-lib.mjs";
+import { label } from "./common.mjs";
+void dir;
 
 let failed = 0;
 function check(name, r, conds, show = []) {

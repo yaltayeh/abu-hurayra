@@ -91,10 +91,34 @@ All numbers: Node 22 (and headless Chrome 157 for times), `scripts/align/*` with
 | 51.mp3 | 360 | 360 | 358 | 2 | 0 | 0 | 0 | 0 | 60 / 60 | 0 | start | 32 |
 | 27.mp3 | 1,194 | 1,151 | 1,115 (96.9 %) | 31 | 5 | 0 | 12 | 28 | 93 / 93 | 0 | start + 7 repeat | 144 |
 
-27.mp3: 99.6 % of its words are matched or substituted, 100 % covered with the 5 inferred. The 7 `repeat` jumps (3–5 words
-restarted inside the same ayah) all happen exactly at a group start, i.e. after a pause, which is how a reciter restarts
-after a breath; I did not check by ear whether the audio really repeats them. 82.mp3's 81 ASR words are 80 Quran words
+27.mp3: 99.6 % of its words are matched or substituted, 100 % covered with the 5 inferred. The 7 `repeat` jumps (3–6 words
+restarted inside the same ayah) all happen exactly at a group start. Checked in `scripts/align/check-repeats.mjs` (next section):
+they are the reciter restarting after a pause, not ASR artifacts (by ear: still to be confirmed by the owner). 82.mp3's 81 ASR words are 80 Quran words
 (`يا` + `أيها` is one word, handled as a split). 1.mp3's matched words include its basmala (Al-Fatiha ayah 1).
+
+### Are the 7 repeats in 27.mp3 real? (`scripts/align/check-repeats.mjs`)
+
+Two independent arguments, no artifact found:
+1. **Structure.** Each group is a separate Whisper call on audio that does not overlap the previous group's (cut points are in the
+   middle of silences) and no text is passed as a prompt, so Whisper cannot re-emit words "from the previous context": the repeated
+   words must come from the audio of the new group.
+2. **Acoustics.** For every repeat, DTW distance (MFCC) between the first recitation of those words and the repeat, against 150 random
+   same-length spans of the file: 12.1–18.3 for the 7 pairs vs a random minimum of 15.9–19.9 and median 20–24; **0 % of the random spans were closer
+   in all 7 cases**. The repeats are 3–6 words long, start 0.5–0.8 s after the previous group's last word, and last 4.5–11 s.
+
+| # | repeat | words | first time | gap before | DTW (random min / median) |
+|---|---|---|---|---|---|
+| 1 | 5:14.2–5:19.0 | وقال رب أوزعني (27:19:5-7) | 5:10.9–5:13.6 | 0.60 s | 18.3 (19.1 / 23.5) |
+| 2 | 6:59.0–7:03.9 | وزين لهم الشيطان أعمالهم (27:24:8-11) | 6:53.9–6:58.4 | 0.64 s | 12.9 (19.9 / 23.1) |
+| 3 | 10:07.3–10:18.6 | فما آتان الله خير مما آتاكم (27:36:7-12) | 9:56.8–10:06.8 | 0.50 s | 14.0 (18.5 / 21.7) |
+| 4 | 11:48.1–11:52.6 | قال هذا من فضل ربي (27:40:19-23) | 11:43.3–11:47.4 | 0.68 s | 12.1 (18.5 / 22.5) |
+| 5 | 14:51.9–14:56.7 | ثم لنقولن لوليه (27:49:6-8) | 14:47.1–14:51.3 | 0.58 s | 13.3 (16.7 / 20.5) |
+| 6 | 16:32.5–16:37.8 | إلا أن قالوا (27:56:5-7) | 16:27.6–16:31.7 | 0.78 s | 14.2 (15.9 / 20.2) |
+| 7 | 19:23.9–19:29.1 | ومن يرسل الرياح بشرا (27:63:7-10) | 19:19.2–19:23.1 | 0.76 s | 17.7 (19.9 / 24.4) |
+
+This cannot prove the *words* are the same (same reciter, similar prosody) but it does show the audio is a re-recitation of the earlier
+span rather than new speech. If a future file shows repeats that are not acoustically close to the first recitation, the guard to add would be:
+reject a `repeat` whose DTW distance is above the random median, or whose audio span is shorter than the words need (≈ 0.25 s per word); not needed here.
 
 ### Synthetic edge cases from real ASR output (`scripts/align/synthetic.mjs`, 16 cases, all pass)
 
