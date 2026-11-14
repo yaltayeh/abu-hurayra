@@ -1,6 +1,8 @@
 import { TextStreamer, type AutomaticSpeechRecognitionPipeline } from "@huggingface/transformers";
 import { analyzeSegments, type Segment } from "./segment.ts";
 import { LONG_WORD_SEC } from "./long-word.ts";
+import { findDip, voicedFraction } from "./audio-dips.ts";
+import { normalize } from "./normalize.ts";
 
 export const SAMPLE_RATE = 16000;
 const HAS_ARABIC = /[ء-ي]/;
@@ -210,7 +212,7 @@ export async function transcribeSegments(audio: Float32Array, cb: Callbacks): Pr
     } else if (words === null) {
       unrecognized.push({ start: g.start, end: g.end });
     }
-    if (words && cb.refineLongWords !== false) words = await refineLongWords(words, g, transcribeRange, log);
+    if (words && cb.refineLongWords !== false) words = await refineLongWords(words, g, transcribeRange, log, audio);
     done++;
     processedSec += g.end - g.start;
     cb.onSegment?.({ index, start: g.start, end: g.end, words: words ?? [], breaks: g.members.slice(1).map((m) => m.start), unrecognized }, { done, total: groups.length, processedSec });
@@ -229,12 +231,20 @@ type RangeFn = (index: number, start: number, end: number, speechEnd: number, la
  * transcribed one by one. Their words replace the group's words of that time range only if there are more of them; a long pause or a
  * real elongation gives the same words and the original is kept.
  */
-export async function refineLongWords(words: Word[], g: Group, run: RangeFn, log: (line: string) => void): Promise<Word[]> {
+export async function refineLongWords(words: Word[], g: Group, run: RangeFn, log: (line: string) => void, audio?: Float32Array): Promise<Word[]> {
+  const bySegment = await refineSegmentBySegment(words, g, run, log);
+  return audio ? refineByAcoustics(bySegment, g, run, log, audio) : bySegment;
+}
+
+async function refineSegmentBySegment(words: Word[], g: Group, run: RangeFn, log: (line: string) => void): Promise<Word[]> {
   if (g.members.length < 2) return words;
   const ranges: [number, number][] = []; // member index ranges to redo, merged
   for (const w of words) {
     const [start, end] = w.timestamp;
-    if (end == null || end - start < LONG_WORD_SEC) continue;
+    if (end == null) continue;
+    // suspicious: a long word, or a word of 1.8 s or more with a silence boundary of the group inside it (two segments, one word)
+    const crossesBoundary = end - start >= 1.8 && g.members.some((m, k) => k > 0 && m.start > start + 0.2 && m.start < end - 0.2);
+    if (end - start < LONG_WORD_SEC && !crossesBoundary) continue;
     const first = g.members.findIndex((m) => start < m.end);
     let last = first;
     while (last + 1 < g.members.length && g.members[last + 1].start < end) last++;
@@ -253,9 +263,101 @@ export async function refineLongWords(words: Word[], g: Group, run: RangeFn, log
       if (r.words) fresh.push(...r.words);
     }
     const old = out.filter((w) => w.timestamp[0] >= from && w.timestamp[0] < to);
-    const used = fresh.length > old.length;
+    // a stretched word of 4 s or more may hide new speech; a shorter one crossing a segment boundary is only trusted when it was simply said again
+    const hasLong = old.some((w) => (w.timestamp[1] ?? 0) - w.timestamp[0] >= LONG_WORD_SEC);
+    const used = fresh.length > old.length && keepsOld(old, fresh) && (hasLong || onlyRepeats(old, fresh));
     log(`long word(s) in ${from.toFixed(1)}-${to.toFixed(1)}s: segment by segment ${old.length} -> ${fresh.length} words${used ? ": " + fresh.map((x) => x.text.trim()).join(" ") : " (not used)"}`);
     if (used) out = [...out.filter((w) => w.timestamp[0] < from), ...fresh, ...out.filter((w) => w.timestamp[0] >= to)];
+  }
+  return out;
+}
+
+const DIP_WORD_SEC = 2.4; // a word at least this long is searched for an internal pause
+const GAP_SEC = 1.5; // a hole between two words at least this long that contains speech is re-transcribed
+const strip = (t: string) => normalize(t);
+const similar = (a: string, b: string) => {
+  const x = strip(a), y = strip(b);
+  const m = x.length, n = y.length;
+  if (!m || !n) return 0;
+  let prev = Array.from({ length: n + 1 }, (_, j) => j);
+  for (let i = 1; i <= m; i++) {
+    const cur = [i];
+    for (let j = 1; j <= n; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (x[i - 1] === y[j - 1] ? 0 : 1));
+    prev = cur;
+  }
+  return 1 - prev[n] / Math.max(m, n);
+};
+
+/**
+ * A real recovery keeps what was already there (the first pass of a repeated phrase, the word that was stretched) and adds to it; a
+ * garbled re-transcription (halves of an elongated word) throws it away. The old words must all be found, in order, among the fresh ones.
+ */
+function keepsOld(old: Word[], fresh: Word[]): boolean {
+  let at = 0;
+  for (const o of old) {
+    let found = false;
+    for (let k = at; k < fresh.length; k++) {
+      if (similar(o.text, fresh[k].text) >= 0.6) { at = k + 1; found = true; break; }
+    }
+    if (!found) return false;
+  }
+  return true;
+}
+
+/** Every fresh word is a (re)spelling of one of the old words: the old words were said again, nothing new was invented. */
+function onlyRepeats(old: Word[], fresh: Word[]): boolean {
+  return fresh.every((f) => old.some((o) => similar(o.text, f.text) >= 0.65));
+}
+
+/**
+ * Two things Whisper does inside one call that the silence segmentation cannot see (18.mp3, checked by ear):
+ *  1. A word said twice in a row with only a breath between ("فاختلط به" ×2) comes back once, as one 3-4 s word. If a word lasts
+ *     >= DIP_WORD_SEC and its audio has a clear pause inside, each side is transcribed on its own; the two replace the word when they
+ *     are two similar words (a repetition) or more words than before.
+ *  2. A stretch of speech is left out altogether (7 s hole between two words). A hole >= GAP_SEC whose audio is mostly voiced is
+ *     transcribed on its own and the words it gives are inserted.
+ */
+async function refineByAcoustics(words: Word[], g: Group, run: RangeFn, log: (line: string) => void, audio: Float32Array): Promise<Word[]> {
+  const out: Word[] = [];
+  const sr = SAMPLE_RATE;
+  for (let i = 0; i < words.length; i++) {
+    const w = words[i];
+    const [start, end] = w.timestamp;
+    // 2. a hole before this word
+    const prevEnd = out.length ? (out[out.length - 1].timestamp[1] ?? g.start) : g.start;
+    if (start - prevEnd >= GAP_SEC && voicedFraction(audio, sr, prevEnd, start, g.start, g.end) >= 0.5) {
+      const r = await run(-1, prevEnd, start, start, `refine gap ${prevEnd.toFixed(1)}s`, false);
+      const fresh = (r.words ?? []).filter((x) => x.timestamp[0] >= prevEnd - 0.05 && x.timestamp[0] < start);
+      log(`gap ${prevEnd.toFixed(1)}-${start.toFixed(1)}s with speech: ${fresh.length} word(s)${fresh.length ? ": " + fresh.map((x) => x.text.trim()).join(" ") : ""}`);
+      if (fresh.length >= 3 && fresh.length >= 0.4 * (start - prevEnd)) out.push(...fresh);
+    }
+    // 1. a long word with a pause inside
+    if (end != null && end - start >= DIP_WORD_SEC) {
+      const dip = findDip(audio, sr, start, end);
+      if (dip) {
+        const a = await run(-1, start, dip.start + 0.03, dip.start + 0.03, `refine dip ${start.toFixed(1)}s (1/2)`, false);
+        const b = await run(-1, dip.end - 0.03, end, end, `refine dip ${start.toFixed(1)}s (2/2)`, false);
+        const fa = a.words ?? [], fb = b.words ?? [];
+        const fresh = [...fa, ...fb];
+        const repetition = fa.length > 0 && fb.length > 0 && similar(fa.map((x) => x.text).join(" "), fb.map((x) => x.text).join(" ")) >= 0.6;
+        const isLong = end - start >= LONG_WORD_SEC;
+        if (fa.length && fb.length && fresh.length >= 2 && (repetition || (isLong && fresh.length > 2)) && keepsOld([w], fresh) && (isLong || onlyRepeats([w], fresh))) {
+          log(`long word "${w.text.trim()}" ${(end - start).toFixed(1)}s has a pause at ${dip.start.toFixed(2)}-${dip.end.toFixed(2)}s: ${fresh.map((x) => x.text.trim()).join(" | ")}`);
+          out.push(...fresh);
+          continue;
+        }
+        log(`long word "${w.text.trim()}" ${(end - start).toFixed(1)}s has a pause at ${dip.start.toFixed(2)}s but its halves are "${fa.map((x) => x.text.trim()).join(" ")}" / "${fb.map((x) => x.text.trim()).join(" ")}": kept`);
+      }
+    }
+    out.push(w);
+  }
+  // 2'. a hole after the last word of the group (the group's speech continues but no words came out)
+  const lastEnd = out.length ? (out[out.length - 1].timestamp[1] ?? g.start) : g.start;
+  if (out.length && g.end - lastEnd >= GAP_SEC && voicedFraction(audio, sr, lastEnd, g.end, g.start, g.end) >= 0.5) {
+    const r = await run(-1, lastEnd, g.end, g.end, `refine tail gap ${lastEnd.toFixed(1)}s`, false);
+    const fresh = (r.words ?? []).filter((x) => x.timestamp[0] >= lastEnd - 0.05);
+    log(`gap ${lastEnd.toFixed(1)}-${g.end.toFixed(1)}s with speech: ${fresh.length} word(s)${fresh.length ? ": " + fresh.map((x) => x.text.trim()).join(" ") : ""}`);
+    if (fresh.length >= 3 && fresh.length >= 0.4 * (g.end - lastEnd)) out.push(...fresh);
   }
   return out;
 }
