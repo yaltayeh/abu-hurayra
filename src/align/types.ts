@@ -133,7 +133,7 @@ export type AlignConfig = {
   wordsPerSecond: number;
   /** Consecutive unmatched words after which the path counts as lost and may re-anchor anywhere. */
   lostAfter: number;
-  cost: { extra: number; skip: number; skipBasmala: number; skipInGap: number; back: number; jump: number; substituted: number; loose: number };
+  cost: { extra: number; skip: number; skipBasmala: number; skipInGap: number; back: number; repeatNear: number; jump: number; substituted: number; loose: number };
   /** Rejection: window size (ASR words), minimum matched ratio, minimum span length. */
   window: number;
   minRatio: number;
@@ -149,7 +149,7 @@ export const DEFAULT_CONFIG: AlignConfig = {
   maxSkip: 3,
   wordsPerSecond: 3.5,
   lostAfter: 4,
-  cost: { extra: 0.9, skip: 0.8, skipBasmala: 0.1, skipInGap: 0.25, back: 1.0, jump: 2.0, substituted: 1.4, loose: 0.15 },
+  cost: { extra: 0.9, skip: 0.8, skipBasmala: 0.1, skipInGap: 0.25, back: 1.0, repeatNear: 0.3, jump: 2.0, substituted: 1.4, loose: 0.15 },
   window: 8,
   minRatio: 0.5,
   minSpan: 4,

@@ -132,7 +132,7 @@ export function alignTranscript(idx: QuranIndex, groups: readonly AsrGroup[], pa
     let s = memo.get(key);
     if (s === undefined) memo.set(key, (s = similarity(A.str[i], idx.strictStr[idx.strict[q]])));
     simOut = s;
-    if (s >= 0.6) { kind = 2; return 0.2 + (1 - s) * 1.2; }
+    if (s >= 0.55) { kind = 2; return 0.2 + (1 - s) * 1.2; }
     kind = 3;
     return C.substituted;
   }
@@ -205,7 +205,8 @@ export function alignTranscript(idx: QuranIndex, groups: readonly AsrGroup[], pa
     nodes = nodes.filter((n) => n.cost <= bestCost + PRUNE).slice(0, cfg.beam);
     const allow = cfg.maxSkip + A.gapAllow[i];
     let jumpFrom: Node | null = null;
-    for (const n of nodes) {
+    const backEval = new Map<number, { near: number; split: number }>(); // per ASR word: garbled / split restarts of each target
+    for (const [rank, n] of nodes.entries()) {
       cells++;
       // extra ASR word
       push(i + 1, n.j, Math.min(n.e + 1, LOST), n.cost + C.extra, n, OP_EXTRA, i);
@@ -230,21 +231,41 @@ export function alignTranscript(idx: QuranIndex, groups: readonly AsrGroup[], pa
           const cat = A.str[i] + A.str[i + 1];
           const t = idx.strictStr[idx.strict[q]];
           const s = cat === t ? 1 : similarity(cat, t);
-          if (s >= 0.85) push(i + 2, q, 0, n.cost + (s === 1 ? 0.25 : 0.3 + (1 - s) * 1.5), n, OP_SPLIT, i);
+          if (s >= 0.75) push(i + 2, q, 0, n.cost + (s === 1 ? 0.25 : 0.3 + (1 - s) * 1.5), n, OP_SPLIT, i);
         }
         if (n.j + 2 < N) {
           const cat = idx.strictStr[idx.strict[n.j + 1]] + idx.strictStr[idx.strict[n.j + 2]];
           const s = cat === A.str[i] ? 1 : similarity(cat, A.str[i]);
-          if (s >= 0.85) push(i + 1, n.j + 2, 0, n.cost + (s === 1 ? 0.25 : 0.3 + (1 - s) * 1.5), n, OP_MERGE, i);
+          if (s >= 0.75) push(i + 1, n.j + 2, 0, n.cost + (s === 1 ? 0.25 : 0.3 + (1 - s) * 1.5) - 0.1, n, OP_MERGE, i); // -0.1: explaining two Quran words with one ASR word beats a substitution that leaves one out
         }
         // backward jump: restart inside the current or the previous ayah of the same surah
         const ay = idx.ayahId[n.j];
         let lo = idx.ayahFirst[ay];
         if (ay > 0 && idx.surah[idx.ayahFirst[ay - 1]] === idx.surah[n.j]) lo = idx.ayahFirst[ay - 1];
+        const cat = i + 1 < m ? A.str[i] + A.str[i + 1] : "";
+        // an immediate repeat needs a real earlier word: it must not overlap this word in time (the same word cut by a segment boundary and
+        // transcribed on both sides) and must not be a stub (a word clipped at a group edge lasts ~0.1 s)
+        const noOverlap = i > 0 && A.start[i] >= A.end[i - 1] - 0.05;
         for (let t = lo; t <= n.j; t++) {
-          const pen = t === idx.ayahFirst[idx.ayahId[t]] ? 0 : 0.1; // repeating a whole ayah is more likely than restarting mid-ayah
-          if (A.sid[i] >= 0 && A.sid[i] === idx.strict[t]) push(i + 1, t, 0, n.cost + C.back + pen, n, OP_BACK, i);
-          else if (A.lid[i] >= 0 && A.lid[i] === idx.loose[t]) push(i + 1, t, 0, n.cost + C.back + pen + C.loose, n, OP_BACK, i);
+          // repeating the last word or the last two words right away is cheap: the reciter says a word (or two) twice in a row
+          // the words being repeated (the last 1-2 Quran words) must have lasted 0.4 s or more in the ASR, or they are a clipped stub
+          const immediate = noOverlap && A.end[i - 1] - A.start[Math.max(0, i - (n.j - t + 1))] >= 0.4;
+          const back = n.j - t <= 1 && immediate ? C.repeatNear : C.back + (t === idx.ayahFirst[idx.ayahId[t]] ? 0 : 0.1); // else: repeating a whole ayah is more likely than restarting mid-ayah
+          if (A.sid[i] >= 0 && A.sid[i] === idx.strict[t]) push(i + 1, t, 0, n.cost + back, n, OP_BACK, i);
+          else if (A.lid[i] >= 0 && A.lid[i] === idx.loose[t]) push(i + 1, t, 0, n.cost + back + C.loose, n, OP_BACK, i);
+          else if (rank < 12) {
+            // the restart word was garbled (a near spelling) or split in two by the ASR (استطع + ما): evaluated once per ASR word and target
+            let ev = backEval.get(t);
+            if (ev === undefined) {
+              const c = matchCost(i, t);
+              const target = idx.strictStr[idx.strict[t]];
+              const s2 = cat && Math.abs(cat.length - target.length) <= 3 ? (cat === target ? 1 : similarity(cat, target)) : 0;
+              ev = { near: kind === 2 ? c : -1, split: s2 >= 0.8 ? (s2 === 1 ? 0.25 : 0.3 + (1 - s2) * 1.5) : -1 };
+              backEval.set(t, ev);
+            }
+            if (ev.near >= 0) push(i + 1, t, 0, n.cost + back + (n.j - t <= 1 ? ev.near * 0.5 : ev.near), n, OP_BACK, i); // the ASR spells a repeated word differently each time
+            if (ev.split >= 0) push(i + 2, t, 0, n.cost + back + ev.split, n, OP_BACK, i, 0, 2);
+          }
         }
       }
       // passage jump allowed: at the start, when lost, or after a completed ayah and a pause
@@ -300,10 +321,12 @@ export function alignTranscript(idx: QuranIndex, groups: readonly AsrGroup[], pa
     if (n.op === OP_JUMP) reached = n.j - 1;
     if (n.op === OP_MATCH || n.op === OP_SPLIT) for (let s = n.skipped; s > 0; s--) items.push({ j: n.j - s, kind: "inferred", conf: 0.3, asr: [], op: OP_MATCH, inferred: true, from: null, asrFirst: n.a });
     if (n.op === OP_MERGE) {
-      [n.j - 1, n.j].forEach((q, h) => items.push({ j: q, kind: "matched", conf: 0.9, asr: [n.a], op: OP_MERGE, inferred: false, merged: true, half: h as 0 | 1, from: n.prev, asrFirst: n.a }));
+      const repM = n.j <= reached;
+      [n.j - 1, n.j].forEach((q, h) => items.push({ j: q, kind: "matched", conf: 0.9, asr: [n.a], op: OP_MERGE, inferred: false, merged: true, half: h as 0 | 1, repeat: repM, from: n.prev, asrFirst: n.a }));
+      reached = Math.max(reached, n.j);
       continue;
     }
-    if (n.op === OP_JUMP && n.na === 2) {
+    if ((n.op === OP_JUMP || n.op === OP_BACK) && n.na === 2) {
       items.push({ j: n.j, kind: "matched", conf: 0.9, asr: [n.a, n.a + 1], op: n.op, inferred: false, split: true, from: n.prev, asrFirst: n.a });
       reached = Math.max(reached, n.j);
       continue;
@@ -341,7 +364,7 @@ export function alignTranscript(idx: QuranIndex, groups: readonly AsrGroup[], pa
       const first = it.half === 0;
       const wFirst = Math.max(1, idx.letters[first ? it.j : it.j - 1]), wSecond = Math.max(1, idx.letters[first ? it.j + 1 : it.j]);
       const cut = A.start[i] + ((A.end[i] - A.start[i]) * wFirst) / (wFirst + wSecond);
-      occ.push(mk(it.j, { kind: "matched", start: first ? A.start[i] : cut, end: first ? cut : A.end[i], confidence: it.conf, asr: [flatOf(i)], group: A.group[i], merged: true }));
+      occ.push(mk(it.j, { kind: "matched", start: first ? A.start[i] : cut, end: first ? cut : A.end[i], confidence: it.conf, asr: [flatOf(i)], group: A.group[i], merged: true, ...(it.repeat ? { repeat: true } : {}) }));
       entryOf.push(it.j);
     } else {
       const a0 = it.asr[0], a1 = it.asr[it.asr.length - 1];
