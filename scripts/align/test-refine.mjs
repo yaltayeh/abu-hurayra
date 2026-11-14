@@ -39,5 +39,35 @@ check("no long word: no calls", out.length === 2 && calls.length === 0);
 // a transcriber that returns nothing (looped / empty) keeps the original
 out = await refineLongWords(original, group, async () => ({ words: null }), log);
 check("failed re-transcription keeps the original", out.length === original.length);
+// ---- acoustic refinement: a synthetic signal (tone = speech, zeros = pause) and a fake transcriber that answers per time range ----
+const SR = 16000;
+const tone = (n) => Float32Array.from({ length: n }, (_, i) => 0.3 * Math.sin((2 * Math.PI * 220 * i) / SR));
+const sig = (parts) => { const out = new Float32Array(parts.reduce((a, p) => a + p[1], 0) * SR); let o = 0; for (const [on, dur] of parts) { if (on) out.set(tone(dur * SR), o); o += dur * SR; } return out; };
+const answers = (table) => async (_i, start, end) => { const hit = table.find(([a, b]) => Math.abs(a - start) < 0.1 && Math.abs(b - end) < 0.1); return { words: hit ? hit[2] : [] }; };
+const ag = (a, b) => ({ ...seg(a, b), members: [seg(a, b)] });
+
+// a word said twice with a 0.6 s breath: 1.5 s speech, 0.6 s pause, 1.5 s speech
+let audio = sig([[1, 1.5], [0, 0.6], [1, 1.5]]);
+let w = [W("فاختلط", 0, 3.6)];
+out = await refineLongWords(w, ag(0, 3.6), answers([[0, 1.53, [W("فاختلط", 0, 1.4)]], [2.07, 3.6, [W("فاختلط", 2.1, 3.5)]]]), log, audio);
+check("a long word with a pause inside, two similar halves -> said twice", out.length === 2 && out[1].timestamp[0] === 2.1, out.map((x) => x.text).join(" "));
+out = await refineLongWords(w, ag(0, 3.6), answers([[0, 1.53, [W("الرحي", 0, 1.4)]], [2.07, 3.6, [W("ورحمن", 2.1, 3.5)]]]), log, audio);
+check("halves that are different fragments (an elongated word) are NOT used", out.length === 1 && out[0] === w[0]);
+audio = sig([[1, 3.6]]);
+out = await refineLongWords(w, ag(0, 3.6), answers([]), log, audio);
+check("a long word with no pause inside is left alone", out.length === 1);
+
+// a hole of 6 s after the last word that is full of speech
+audio = sig([[1, 2], [1, 6]]);
+w = [W("نفس", 0.5, 2)];
+out = await refineLongWords(w, ag(0, 8), answers([[2, 8, [W("قال", 2.1, 2.6), W("أقتلت", 2.6, 3.5), W("نفسا", 3.5, 5), W("زكية", 5, 7)]]]), log, audio);
+check("a speech-filled hole after the last word is transcribed and inserted", out.length === 5, out.map((x) => x.text).join(" "));
+audio = sig([[1, 2], [0, 6]]);
+out = await refineLongWords(w, ag(0, 8), answers([[2, 8, [W("هلوسة", 3, 4), W("وهمية", 4, 5), W("كلمة", 5, 6)]]]), log, audio);
+check("a silent hole is not transcribed", out.length === 1);
+audio = sig([[1, 2], [1, 6]]);
+out = await refineLongWords(w, ag(0, 8), answers([[2, 8, [W("الم", 3, 4), W("ما", 4, 5)]]]), log, audio);
+check("a hole answered with 2 words (too few for 6 s) is not inserted", out.length === 1);
+
 console.log(failed ? `${failed} FAILED` : "ALL PASSED");
 process.exitCode = failed ? 1 : 0;

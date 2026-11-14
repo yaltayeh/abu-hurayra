@@ -1,0 +1,161 @@
+{
+  "file": "18.mp3 (Surah Al-Kahf, reciter folder 7, 33 min)",
+  "source": "ground truth from a person listening to the file with the review page; times are mm:ss converted to seconds",
+  "tolerance": 1.0,
+  "cases": [
+    {
+      "id": 1,
+      "type": "repeat",
+      "words": [
+        "18:10:11"
+      ],
+      "window": [
+        101,
+        120
+      ],
+      "note": "first repeat 'فقالوا ربنا آتنا من لدنك رحمة' must continue to 18:10:11 (it stopped one word early); the second repeat was already correct"
+    },
+    {
+      "id": 2,
+      "type": "repeat",
+      "words": [
+        "18:19:27"
+      ],
+      "window": [
+        325,
+        330
+      ],
+      "note": "said twice in a row, 5:25-5:30"
+    },
+    {
+      "id": 3,
+      "type": "repeat",
+      "words": [
+        "18:19:34"
+      ],
+      "window": [
+        339,
+        343
+      ],
+      "note": "said twice in a row, 5:39-5:43"
+    },
+    {
+      "id": 4,
+      "type": "boundary",
+      "words": [
+        "18:21:15",
+        "18:21:16"
+      ],
+      "window": [
+        380,
+        400
+      ],
+      "note": "not a repeat: 18:21:15 took time from the next word (timestamp boundary wrong); no reference times were given, see test-human.mjs for the acoustic check"
+    },
+    {
+      "id": 5,
+      "type": "repeat",
+      "words": [
+        "18:31:15"
+      ],
+      "window": [
+        630,
+        634
+      ],
+      "note": "said twice in a row, 10:30-10:34"
+    },
+    {
+      "id": 6,
+      "type": "repeat",
+      "words": [
+        "18:45:10",
+        "18:45:11"
+      ],
+      "window": [
+        877,
+        880
+      ],
+      "note": "these two words repeated, 14:37-14:40"
+    },
+    {
+      "id": 7,
+      "type": "repeat",
+      "words": [
+        "18:47:7"
+      ],
+      "window": [
+        918,
+        921
+      ],
+      "note": "said twice in a row, 15:18-15:21"
+    },
+    {
+      "id": 8,
+      "type": "repeat",
+      "words": [
+        "18:49:8"
+      ],
+      "window": [
+        949,
+        954
+      ],
+      "note": "said twice in a row, 15:49-15:54"
+    },
+    {
+      "id": 9,
+      "type": "repeat",
+      "words": [
+        "18:74:7",
+        "18:74:8",
+        "18:74:9",
+        "18:74:10",
+        "18:74:11",
+        "18:74:12"
+      ],
+      "window": [
+        1392,
+        1406
+      ],
+      "note": "repeated, 23:12-23:26"
+    },
+    {
+      "id": 10,
+      "type": "repeat",
+      "words": [
+        "18:77:7",
+        "18:77:8",
+        "18:77:9"
+      ],
+      "window": [
+        1444,
+        1454
+      ],
+      "note": "the repeat was shown with only 18:77:8 + 18:77:9; it must restart at 18:77:7 (24:04-24:14)"
+    },
+    {
+      "id": 11,
+      "type": "repeat",
+      "words": [
+        "18:82:20"
+      ],
+      "window": [
+        1565,
+        1569
+      ],
+      "note": "said twice in a row, 26:05-26:09"
+    },
+    {
+      "id": 12,
+      "type": "repeat",
+      "words": [
+        "18:106:6"
+      ],
+      "window": [
+        1905,
+        1909
+      ],
+      "note": "said twice in a row, 31:45-31:49. The human wrote 18:105:7 (فحبطت), but the audio at 31:45-31:49 is 18:106:6 (واتخذوا, ayah 106): assumed an ayah-number slip, to be confirmed",
+      "written_as": "18:105:7"
+    }
+  ]
+}

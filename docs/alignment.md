@@ -120,6 +120,41 @@ This cannot prove the *words* are the same (same reciter, similar prosody) but i
 span rather than new speech. If a future file shows repeats that are not acoustically close to the first recitation, the guard to add would be:
 reject a `repeat` whose DTW distance is above the random median, or whose audio span is shorter than the words need (≈ 0.25 s per word); not needed here.
 
+### Human ground truth for 18.mp3 (`fixtures/18-human.json`, `test-human.mjs`)
+
+A person listened to 18.mp3 on the review page and listed what was wrong; each listed word must appear at least twice (matched/substituted, the
+later one flagged `repeat`) in the person's time window. Before the fixes 0 / 11 scored cases were right; after the aligner changes alone 6 / 11
+(on the old transcript); with the new transcription refinement **11 / 11**. Where each case was lost (`diagnose-human.mjs` counts the
+repeated words in the ASR output before alignment: grouped / refined / per silence segment):
+
+| # | Word(s) | Lost in | Cause | Fix |
+|---|---|---|---|---|
+| 1 | 18:10:11 (the 1st repeat stops one word early) | both | the ASR wrote the first "لدنك رحمة" as one garbled word `لَدُنْكَرَةٍ`; the aligner substituted it and skipped 10:11 | merge move (1 ASR word = 2 Quran words) allowed from similarity 0.75 and preferred to a substitution that leaves a word out; merged words now get the `repeat` flag |
+| 2 | 18:19:27 | aligner | ASR had both `فَلْيَنْظُرْ`; the repeat cost 1.1 vs 0.9 for an extra word | repeating the last 1-2 Quran words right away costs 0.3 |
+| 3 | 18:19:34 | both | one 3.8 s word (no silence boundary, a 0.62 s dip); the two renditions are spelled differently (`واليتلق` / `واليتلقف`) | dip split; near-spelling immediate repeat at half cost |
+| 4 | 18:21:15-16 boundary | – | not a repeat; see below | not fixed |
+| 5 | 18:31:15 | aligner | ASR had both | cheap immediate repeat |
+| 6 | 18:45:10-11 | ASR | one 3.0 s word with a segment boundary inside it | boundary-crossing refinement |
+| 7 | 18:47:7 | ASR | one 3.8 s word, boundary inside | same |
+| 8 | 18:49:8 | aligner | ASR had both | cheap immediate repeat |
+| 9 | 18:74:7-12 | ASR | a 7 s hole after the last word of the group | hole fill |
+| 10 | 18:77:7-9 (restart missed 77:7) | aligner | ASR had both passes but the restart word is split/garbled (`فَاسْتَطَعَ مَا` for `ٱسْتَطْعَمَا`) | backward jump allowed to a garbled (≥ 0.55) or split restart word |
+| 11 | 18:82:20 | ASR | one 3.9 s word, boundary inside | boundary-crossing refinement |
+| 12 | 18:105:7 | ASR + aligner | see the note on the label; the second `وَاتَّخَذُوا` was an extra | refinement + cheap immediate repeat |
+
+Aligner (`src/align/align.ts`): an immediate repeat of the same 1-2 Quran words costs 0.3 (instead of 1.0) when it does not overlap the previous
+word in time and the repeated words lasted ≥ 0.4 s (a word cut by a segment/group boundary is transcribed on both sides: 18.mp3 20:08 `حَتَّى`,
+11:05 `وَحَفَفْنَاهُمَا` were such artifacts and are not turned into repeats); backward jumps accept a garbled or split restart word; the near-spelling
+threshold went from 0.6 to 0.55. Speed is unchanged (27.mp3: 182 ms in Node).
+
+**Label of case 12.** The audio at 31:45-31:49 is `وَاتَّخَذُوا` = **18:106:6** (ayah 106); 18:105:7 is `فَحَبِطَتْ`, said at 31:27. The fixture uses 18:106:6
+and records `written_as: 18:105:7`: please confirm this was an ayah-number slip.
+
+**Case 4 (timestamp boundary).** The ASR puts the end of `يَتَنَازَعُونَ` (18:21:15) and the start of `بَيْنَهُمْ` (18:21:16) at 385.4 s. The energy envelope shows the
+vowel of the first word ending at 385.23 s and the closure of `ب` (a 10 dB dip) at 385.24-385.33 s; re-transcribing [383.6, 385.0] gives an end of 385.1 s.
+So the boundary is about 0.1-0.15 s late, which agrees with "took time from the next word", but without your reference seconds I cannot measure how
+far off it is. A possible fix (not applied): snap every word start to the nearest energy onset within ±0.2 s.
+
 ### Synthetic edge cases from real ASR output (`scripts/align/synthetic.mjs`, 16 cases, all pass)
 
 Built by concatenating the real ASR words of 82 / 51 / 1 per ayah (each part its own group = pause, unless noted).

@@ -35,7 +35,8 @@ const energy = (a, b) => { let e = 0, n = 0; for (let i = Math.round(a * SR); i 
 
 // ---- find the repeats ----
 const { idx, core } = loadIndex();
-const groups = loadGroups(dir, "27");
+const name = process.env.NAME ?? "27"; // which dump in <asr-dir>: <name>.q8.json + <name>.segments.json
+const groups = loadGroups(dir, name);
 const r = alignTranscript(idx, groups);
 const occ = r.occurrences;
 const runs = [];
@@ -44,7 +45,7 @@ const speech = groups.flatMap((g) => g.words);
 const asrOf = (o) => o.asr.map((i) => speech[i]);
 const fmt = (t) => `${Math.floor(t / 60)}:${(t % 60).toFixed(2).padStart(5, "0")}`;
 const textOf = (o) => core.textWords[o.textIndex];
-console.log(`${runs.length} repeat runs in 27.mp3 (${audio.length / SR | 0} s)\n`);
+console.log(`${runs.length} repeat runs in ${name}.mp3 (${audio.length / SR | 0} s)\n`);
 const rows = [];
 let seed = 12345; const rnd = () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 2 ** 32;
 for (const [n, [k, e]] of runs.entries()) {

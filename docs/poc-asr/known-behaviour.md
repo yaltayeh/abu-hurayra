@@ -45,22 +45,36 @@ accuracy tables is this word. Mean/median differences vs Python are therefore sl
 
 ## Whisper drops repeated phrases inside one call (found with 18.mp3)
 
-When the reciter says a phrase twice inside one group (a group is up to 25 s of silence-delimited segments), Whisper often writes it once
-and the alignment stretches the word before it over the lost audio: in 18.mp3 `لَدُنْكَ` lasted 9.1 s (1:46–1:55, "من لدنك رحمة" said twice)
-and `كَنْزٌ` 6.3 s (25:44–25:50, "وكان تحته كنز لهما" twice); the review page showed no repeat there. 20 words of 18.mp3 last ≥ 4 s; most were
-the same thing (a repeated phrase or a skipped stretch: "قل ربي أعلم بعدتهم…" after `كَلْبُهُمْ` 10 s).
-- **Not a window-length effect.** The same audio transcribed one *silence segment* at a time gives both occurrences; a single Whisper call over
-  both (even a 13 s window) did not, in the cases tried. Window variants around the long word were unreliable; re-running the group's segments one
-  by one was reliable (same path as the existing "group looped" fallback).
-- **Fix (`refineLongWords` in `src/transcribe.ts`, on by default, `?refine=0` disables):** for every word of a group lasting ≥ 4 s
-  (`src/long-word.ts`), the group's segments that word spans are transcribed one by one; their words replace the group's words of that time
-  range only when there are more of them. Pauses and real elongations (same words) are kept.
-- **Result on 18.mp3** (Node, q8): 1,616 → 1,670 words, repeat jumps found by the aligner 6 → 19, both reported spots recovered
-  (1:46–1:55: "فقالوا ربنا آتنا من لدنك رحمة" twice; 25:44–25:50 the second "وكان تحته كنز لهما"), 110/110 ayahs, 98.3 % of Quran words
-  matched. Cost: transcription time +32 % (217 → 286 s for 33 min), +40 % on 27.mp3 (204 → 288 s).
-  27.mp3 gained 3 repeats (27:18:13-15, 27:28:6-8, 27:90:4-7), each acoustically as close to its first recitation as the 7 known ones;
-  one span at 8:28–8:36 (27:31) now contains slightly garbled words (the old output had one spurious 4.8 s `اللَّهُ`) and is reported as a rejected span.
-- Words that still last ≥ 4 s after this are flagged "long words" in the review page.
+When the reciter says a word or a phrase twice, Whisper often writes it once and the alignment stretches the word before it over the lost
+audio (18.mp3: `لَدُنْكَ` 9.1 s, "من لدنك رحمة" said twice; `كَنْزٌ` 6.3 s). Later a person listened to the whole file and listed 12 places
+(`scripts/align/fixtures/18-human.json`, scored by `scripts/align/test-human.mjs`); the causes found:
+
+| Loss | Where it happens | What the data showed | Fix (`refineLongWords`, `src/transcribe.ts`) |
+|---|---|---|---|
+| a phrase said twice inside one 20-25 s group | the group's single Whisper call | the same audio transcribed segment by segment gives both | words of ≥ 4 s: redo the group's segments that word spans, one by one |
+| a word said twice with a breath of 0.3-0.7 s | below the silence segmenter's minimum, so one segment, one call | one 3-4 s "word"; an energy dip of 0.4-0.7 s inside it; each side transcribed alone gives the word | a word of 1.8 s+ that has a group segment boundary inside it, or 2.4 s+ with a pause inside (`src/audio-dips.ts`): transcribe each side |
+| speech left out entirely | 7 s hole after the last word of a group (the repeat of ayah 74:7-12) | audio is loud, no words | a hole of 1.5 s+ whose audio is mostly voiced is transcribed alone; ≥ 3 words and ≥ 0.4 words/s are inserted |
+
+A refinement replaces the original words only when the result keeps the old words (each found in order, similarity ≥ 0.6) **and** has more
+of them; for words under 4 s the added words must also be respellings of the old ones (≥ 0.65). Without these guards elongated words (madd)
+split at their natural dips produced garbage on 51.mp3 and 82.mp3 (halves "تسرمون / تجلون" for `تَسْتَعْجِلُونَ`). `?refine=0` disables
+everything. Words that still last ≥ 4 s are flagged "long words" in the review page.
+
+Not window length: windows of 13-20 s around the repeat, single Whisper call, did **not** recover it; per silence segment did.
+
+**Results** (Node, q8, `scripts/align/real.mjs` / `test-human.mjs`; "before" = the previous commit's pipeline):
+
+| | before | after |
+|---|---|---|
+| 18.mp3 words / repeat jumps / extras | 1,670 / 19 / 18 | 1,700 / 32 / 10; 111 ayah completions (110 ayahs + a repeated ayah end) |
+| 18.mp3 human cases correct | 0 / 11 | **11 / 11** (+ 1 manual) |
+| 1.mp3 | 20 words, 6/7 ayahs (I had assumed the file ended at 1:6:3) | 29 words, 7/7 ayahs: the tail 1:6-7 had been dropped by Whisper |
+| 82.mp3 | 81 words, 80 matched, 19/19 | identical |
+| 51.mp3 | 360 words, 358 matched, 0 extras | 362 words, 357 matched, 2 extras (`غفِرُونَ`, `وَالْمَحْسَرِ`: garbled halves of two elongated words) |
+| 27.mp3 | 1,194 words, 7 repeats (11 with the new aligner), 93/93 | 1,227 words, 20 repeats, 93/93; 19 of the 20 repeats are acoustically closer to their first recitation than every random span (the 20th, 16:32, now has a 0.7 s first span and cannot be judged) |
+| transcription time | 18: 217 s, 27: 204 s, 51: 53 s | 361 s (+66 %), 333 s (+63 %), 109 s (+105 %) |
+
+The time cost is the extra Whisper calls (every call pays for a padded 30 s window). `?refine=0` brings the old speed back.
 
 ## Unverified claims (do not rely on them)
 
